@@ -65,3 +65,27 @@ The six deep learning-based methods are:
 6. **SAITS** – Self-Attention-based Imputation for Time Series ([Du et al., 2023](https://doi.org/10.1016/j.eswa.2023.119619)).
 
 These methods represent different modeling approaches, including recurrent neural networks, Transformer-based architectures, diffusion models, and variational autoencoders. Their implementations were developed based on the corresponding original publications.
+
+### Performance Evaluation and Cross-Validation
+
+We employed **5-fold patient-level stratified cross-validation** to evaluate the performance of different imputation methods. In each fold, patients were divided into training (72%), validation (8%), and test (20%) sets. All segments belonging to the same patient were assigned to the same set to prevent data leakage. Among the 64 patients, four test folds contained 13 patients each, while the remaining fold contained 12 patients. The validation set contained approximately 5 patients per fold.
+
+After cross-validation, predictions from all five held-out test folds were aggregated to evaluate the overall imputation performance.
+
+Two evaluation metrics were used: **mean absolute error (MAE)** and **mean absolute percentage error (MAPE)**, defined as follows:
+
+**Mean Absolute Error (MAE):**
+
+$$
+\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|
+$$
+
+**Mean Absolute Percentage Error (MAPE):**
+
+$$
+\mathrm{MAPE} = \frac{100\%}{n}\sum_{i=1}^{n}\frac{|y_i-\hat{y}_i|}{|y_i|+10^{-8}}
+$$
+
+where $y_i$ and $\hat{y}_i$ represent the ground-truth and imputed values at time point $i$, respectively, and $n$ is the total number of evaluated time points within the artificially generated gaps. The constant $10^{-8}$ is added to the denominator of MAPE to prevent division by zero.
+
+Both metrics were calculated using the aggregated predictions from all five test folds, considering only artificially masked time points with available ground-truth values.
