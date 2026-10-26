@@ -10,27 +10,11 @@ This study systematically evaluates conventional and deep learning-based imputat
 
 ### Data Structure
 
-The dataset consists of mean arterial pressure (MAP) and regional cerebral oxygen saturation (ScO₂) recordings from 64 pediatric patients who experienced cardiac arrest at Children's Medical Center Dallas between 2019 and 2024. MAP was measured using invasive arterial monitoring, while ScO₂ was recorded using near-infrared spectroscopy (NIRS). Both signals were collected concurrently at a sampling frequency of 0.2 Hz (one sample every 5 seconds).
+The dataset consists of MAP and ScO₂ recordings from 64 pediatric patients who experienced cardiac arrest at Children's Medical Center Dallas between 2019 and 2024. MAP was measured using invasive arterial monitoring, while ScO₂ was recorded using near-infrared spectroscopy (NIRS). Both signals were collected concurrently at a sampling frequency of 0.2 Hz (one sample every 5 seconds).
 
 The original dataset contains 5,794.46 hours of recordings (4,172,012 time points) stored in multiple CSV files. These recordings were divided into non-overlapping 1.5-hour segments (1,080 time points per segment), excluding incomplete segments. This process yielded **3,817 segments from 64 patients**, representing 5,725.50 hours of recordings.
 
 The segmented dataset contains naturally occurring missing values, with missing-data proportions of **5.44% for MAP** and **19.70% for ScO₂**. Most missing-data gaps were shorter than 1 minute, accounting for 66.88% and 85.21% of the total gaps in MAP and ScO₂, respectively.
-
-**Dataset Summary:**
-
-| Parameter | Value |
-|-----------|-------|
-| Number of patients | 64 |
-| Sampling frequency | 0.2 Hz |
-| Sampling interval | 5 seconds |
-| Original recording duration | 5,794.46 hours |
-| Total time points | 4,172,012 |
-| Segment duration | 1.5 hours |
-| Time points per segment | 1,080 |
-| Total segments | 3,817 |
-| Total segmented duration | 5,725.50 hours |
-| Missing-data proportion (MAP) | 5.44% |
-| Missing-data proportion (ScO₂) | 19.70% |
 
 <img width="846" height="333" alt="image" src="https://github.com/user-attachments/assets/b21693db-8646-4b40-8193-f8779bc25270" />
 Figure 1. The number of length-dependent (in min) data gaps of (a) ScO₂ and (b) MAP, as labeled individually by the number of missing gaps/incidents and corresponding per-centage for each time length. Note that the notation of [a, b) min denotes a time interval that includes values equal to or greater than “a” min but less than “b” min.
