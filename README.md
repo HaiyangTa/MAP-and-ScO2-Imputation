@@ -32,4 +32,20 @@ The segmented dataset contains naturally occurring missing values, with missing-
 | Missing-data proportion (MAP) | 5.44% |
 | Missing-data proportion (ScO₂) | 19.70% |
 
+<img width="846" height="333" alt="image" src="https://github.com/user-attachments/assets/b21693db-8646-4b40-8193-f8779bc25270" />
+Figure 1. The number of length-dependent (in min) data gaps of (a) ScO₂ and (b) MAP, as labeled individually by the number of missing gaps/incidents and corresponding per-centage for each time length. Note that the notation of [a, b) min denotes a time interval that includes values equal to or greater than “a” min but less than “b” min.
+
+### Problem Definition
+
+Given a multivariate time series $X \in \mathbb{R}^{T \times D}$, where $T$ represents the number of time points and $D$ represents the number of channels ($D = 2$ for MAP and ScO₂), the objective of imputation is to reconstruct missing values using conventional or deep learning-based methods.
+
+Let $X$ denote the time-series data containing missing values and $X_{\mathrm{gt}}$ denote the corresponding ground-truth data. The imputation function $f(X)$ aims to minimize the reconstruction error, expressed as:
+
+$$
+\min_f \mathcal{L} = \left\|f(X) - X_{\mathrm{gt}}\right\|_1
+$$
+
+where $\|\cdot\|_1$ represents the L1 norm (sum of absolute errors).
+
+Since ground-truth values are unavailable for naturally occurring missing data, artificial gaps are introduced into observed portions of the recordings. Reconstruction errors are then calculated only at these artificially masked positions to evaluate imputation performance.
 
