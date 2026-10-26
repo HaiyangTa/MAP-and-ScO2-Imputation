@@ -49,7 +49,8 @@ where $\|\cdot\|_1$ represents the L1 norm (sum of absolute errors).
 
 Since ground-truth values are unavailable for naturally occurring missing data, artificial gaps are introduced into observed portions of the recordings. Reconstruction errors are then calculated only at these artificially masked positions to evaluate imputation performance.
 
-<img width="806" height="290" alt="image" src="https://github.com/user-attachments/assets/3188635d-8a81-4d75-925c-bd5836ce3d54" />
+<img width="975" height="351" alt="pic" src="https://github.com/user-attachments/assets/aeb9067a-8580-4df6-bcf0-3d63bb70a8d5" />
+
 Figure 2. The imputation workflow of this work includes four steps. Blue-shaded pixels with “B” in Step 2 illustrate the artificially introduced data gaps (i.e., artificially blanking observed values) to the ground truth segment X_gt. It will create the segment with artificially introduced gaps denoted as X. The corresponding pixels in Step 3 list the imputed segments, X_imp, created by the imputation function, f(X). In Step 4, the parameters of the imputation function f(X) were optimized by minimizing the loss function between X_imp and X_gt via backpropagation during model training.
 
 ### Selection of Imputation Methods
