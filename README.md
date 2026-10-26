@@ -49,3 +49,19 @@ where $\|\cdot\|_1$ represents the L1 norm (sum of absolute errors).
 
 Since ground-truth values are unavailable for naturally occurring missing data, artificial gaps are introduced into observed portions of the recordings. Reconstruction errors are then calculated only at these artificially masked positions to evaluate imputation performance.
 
+### Selection of Imputation Methods
+
+Nine imputation methods were selected for evaluation, including three conventional methods and six deep learning-based methods.
+
+The three conventional methods are linear interpolation (LI), mean carry-forward (MCF), and last observation carried forward (LOCF).
+
+The six deep learning-based methods are:
+
+1. **NAOMI** – Non-Autoregressive Multiresolution Sequence Imputation ([Liu et al., 2019](https://arxiv.org/abs/1901.10946)).
+2. **MTSIT** – Multivariate Time Series Imputation with Transformers ([Yıldız et al., 2022](https://doi.org/10.1109/LSP.2022.3224880)).
+3. **CSDI** – Conditional Score-based Diffusion Models for Probabilistic Time Series Imputation ([Tashiro et al., 2021](https://arxiv.org/abs/2107.03502)).
+4. **TransMIT** – Transformer-Based Missing Data Imputation in Time Series ([Li et al., 2026](https://doi.org/10.1109/TIE.2026.3672736)).
+5. **GP-VAE** – Deep Probabilistic Time Series Imputation ([Fortuin et al., 2020](https://proceedings.mlr.press/v108/fortuin20a.html)).
+6. **SAITS** – Self-Attention-based Imputation for Time Series ([Du et al., 2023](https://doi.org/10.1016/j.eswa.2023.119619)).
+
+These methods represent different modeling approaches, including recurrent neural networks, Transformer-based architectures, diffusion models, and variational autoencoders. Their implementations were developed based on the corresponding original publications.
