@@ -1,6 +1,6 @@
 # Conventional and Deep Learning Methods for MAP and ScO₂ Imputation
 
-This repository provides implementations of conventional and deep learning-based methods for imputing missing data in mean arterial pressure (MAP) and regional cerebral oxygen saturation (ScO₂) recordings.
+This repository provides implementations of conventional and deep learning-based methods for imputing missing data in mean arterial pressure (MAP) and regional cerebral oxygen saturation (ScO₂) recordings, with recording frequency of 0.2 Hz (one time point per five seconds).
 
 ### Introduction
 
