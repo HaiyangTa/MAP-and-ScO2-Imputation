@@ -870,15 +870,11 @@ class MTSITImputerOriginalAligned(nn.Module):
 
 
 
-
-
-
 # CSDI 
 import numpy as np
 import torch
 from torch import nn
 from diff_models import diff_CSDI
-
 
 class OfficialCSDIImputer(nn.Module):
     def __init__(self, seq_len=1080, d_in=2, channels=64, n_layers=4,
@@ -1059,7 +1055,6 @@ class OfficialCSDIImputer(nn.Module):
 """TransMIT: PyTorch port of the authors' TensorFlow/Keras dual-attention model.
 Reference: https://github.com/SJoeQin/TransMIT (TransMIT.py, utils.py, run.py)
 """
-
 import math
 import torch
 from torch import nn
@@ -1153,7 +1148,6 @@ class TransMITImputer(nn.Module):
 
     @torch.no_grad()
     def set_standardization(self, mean, std):
-        """Set TRAIN-ONLY channel statistics; never fit using val/test patients."""
         mean = torch.as_tensor(mean, dtype=self.data_mean.dtype, device=self.data_mean.device).reshape(1, 1, self.d_in)
         std = torch.as_tensor(std, dtype=self.data_std.dtype, device=self.data_std.device).reshape(1, 1, self.d_in)
         if not torch.isfinite(mean).all() or not torch.isfinite(std).all() or (std <= 0).any():
@@ -1163,11 +1157,6 @@ class TransMITImputer(nn.Module):
         self.standardization_fitted.fill_(True)
 
     def predict_window(self, window):
-        """Predict current (final-window) value from one sliding window.
-
-        Args: window (N,s+1,D), with missing entries filled with 0 after z-scaling.
-        Returns (N,D) predicted standardized channel values.
-        """
         if window.ndim != 3 or window.shape[1:] != (self.window_len, self.d_in):
             raise ValueError(f'Expected (N,{self.window_len},{self.d_in}); got {tuple(window.shape)}')
         x = self.input_temporal(window)
@@ -1188,8 +1177,6 @@ class TransMITImputer(nn.Module):
 
     @torch.no_grad()
     def forward(self, x_in, m_hat, predict_observed=False):
-        """Sequential inference; optionally predicts even completely observed steps.
-        """
         self._check_inputs(x_in, m_hat)
         B, T, D = x_in.shape
         mask = (m_hat > 0.5) & torch.isfinite(x_in)
@@ -1227,13 +1214,6 @@ class TransMITImputer(nn.Module):
         return torch.sqrt(((y_pred - y_true).square() * weight).sum() / n + 1e-12)
 
     def training_loss(self, x_in, m_hat, x_true, i_mask, alpha=None, max_train_windows=None):
-        """Official-style sliding-window teacher-forced training, weighted RMSE.
-        Prior s steps come from TRAINING ground truth, as in TransMIT.py.
-        At the current step, only observed x_in values are supplied. All input
-        sequences must belong to the current TRAIN fold; never call on test data.
-        Stochastic selection from the available sliding windows bounds memory.
-        Returns: (total_weighted_rmse, reconstruction_rmse, imputation_rmse).
-        """
         self._check_inputs(x_in, m_hat)
         if x_true.shape != x_in.shape or i_mask.shape != x_in.shape:
             raise ValueError('x_true and i_mask must have same shape as x_in')
@@ -1269,11 +1249,6 @@ class TransMITImputer(nn.Module):
 
     @torch.no_grad()
     def validation_loss(self, x_in, m_hat, x_true, i_mask, alpha=None):
-        """Actual autoregressive validation RMSE on observed/withheld values.
-
-        Predicting the observed points as well is necessary for the original
-        reconstruction RMSE component (x_c would trivially yield zero error).
-        """
         predicted, completed, _, _, _ = self.forward(x_in, m_hat, predict_observed=True)
         a = self.alpha if alpha is None else float(alpha)
         valid = torch.isfinite(x_true)
