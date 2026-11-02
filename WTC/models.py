@@ -19,12 +19,6 @@ import pandas as pd
 
 
 # NAOMI
-"""Faster channel-aware NAOMI-inspired recursive imputer.
-Same model parameters/state_dict, pivot ordering, normalization, and masked loss
-as naomi_channel_aware.py. Caches mask-derived recursive schedules and evaluates
-pivots for each decoder scale in batches. GRU is still re-run each round.
-
-"""
 import math
 import numpy as np
 import torch
@@ -174,30 +168,10 @@ def masked_target_loss(outputs,truth,observed,holdout,loss_type='mse'):
 ### SAITS
 
 """SAITS source-aligned, self-contained PyTorch architecture for (B, 1080, 2).
-
 Architecture adapted from Du, Cote & Liu, SAITS, Expert Systems with
 Applications 219 (2023), 119619. Official MIT-licensed PyTorch code:
 https://github.com/WenjieDu/SAITS/blob/main/modeling/saits.py
 https://github.com/WenjieDu/SAITS/blob/main/modeling/layers.py
-
-Author-implementation architecture retained:
-  * two blocks of diagonally-masked (optional) self-attention;
-  * separate Q/K/V projections, pre-layernorm attention and FFN;
-  * group-based weight-sharing options (inner_group/between_group);
-  * first-stage linear reconstruction, second-stage beta-ReLU-gamma;
-  * sigmoid gate over [observed mask, last second-block attention weights];
-  * correct final observed-value complementation and original ORT/MIT MAE.
-
-Interface adapted to your masked multivariate time series, x_in/m_hat tensors.
-Numerical/engineering adaptations: stable nonfinite masking in the objective;
-PyTorch scaled-dot-product attention for intermediate layers by default
-(mathematically the same softmax attention, not an architectural change).
-Using 'fast_attention=False' computes explicit attention at every layer.
-This is a source-aligned port, not a drop-in load of official checkpoints.
-
-Paper-compatible loss formula: lam_ort * mean(MAE(tilde1), MAE(tilde2),
-MAE(tilde3)) on observed entries + lam_mit * MAE(tilde3) on held-out entries.
-Select lam_ort / lam_mit in the training script.
 """
 import math
 import torch
@@ -303,16 +277,6 @@ class _SAITSEncoderLayer(nn.Module):
 
 
 class SAITSImputerStandard(nn.Module):
-    """Original SAITS architecture with x_in/m_hat call signature.
-
-    Defaults retain your two-layer/128-dim comparison capacity. To reproduce
-    the authors' PhysioNet2012 *hyperparameters*, use n_groups=5,
-    n_group_inner_layers=1, param_sharing_strategy='inner_group',
-    d_model=256, d_ff=512, n_heads=8, d_k=32, d_v=32, dropout=0.
-    That hyperparameter choice is NOT guaranteed best for 1080-step data.
-
-    forward(x_in,m_hat) returns (tilde1, tilde2, tilde3, x_c, attn2_mean).
-    """
     def __init__(
         self,
         seq_len=1080, d_in=2, d_model=128, n_heads=8, d_ff=256,
@@ -405,7 +369,6 @@ class SAITSImputerStandard(nn.Module):
 
 
 def masked_mae(estimation, target, mask, eps=1e-9):
-    """Original MAE ratio with robust exclusion of nonfinite target values."""
     if estimation.shape != target.shape or estimation.shape != mask.shape:
         raise ValueError('estimation, target and mask must have identical shapes')
     valid = (mask > 0.5) & torch.isfinite(target)
@@ -439,33 +402,9 @@ def saits_losses_standard(x_tilde_1, x_tilde_2, x_tilde_3, x_c,
 
 
 """GP-VAE PyTorch port adapted to MAP/ScO2 (B,1080,2).
-
 Source: https://github.com/ratschlab/GP-VAE (Fortuin et al., AISTATS 2020)
 References: lib/models.py (JointEncoder / BandedJointEncoder, GaussianDecoder,
 GP_VAE / HI_VAE), lib/nn_utils.py, lib/gp_kernel.py, train.py.
-
-Faithful source concepts:
-  - CNN time-series encoder (one Conv1D followed by pointwise Dense layers)
-  - either diagonal JointEncoder posterior (EXACT analytic Gaussian KL) or
-    banded-precision BandedJointEncoder posterior (structured Gaussian)
-  - Gaussian decoder with fixed scale=1, not MAE
-  - Cauchy GP prior with 1e-3 diagonal jitter (source convention)
-  - negative ELBO = observed-only Gaussian NLL summed per sequence
-                    + beta * full-trajectory GP KL
-  - sampled latent z in training; posterior mean for deterministic imputation
-
-Differences from the released TensorFlow model:
-  - PyTorch, 1080 samples and 2 channels; explicit observed mask
-  - optional normalization (the source takes externally preprocessed data)
-  - banded mode computes an unbiased *one-sample* Monte-Carlo KL estimate,
-    rather than the source's analytic KL (avoids O(B * Z * T**2) covariance
-    and O(T**3) per-posterior operations at T=1080). For the exact source
-    analytic ELBO use posterior='diagonal' or original TF code.
-  - forward returns the dict keys used by the user's existing training code.
-
-IMPORTANT: Hidden ground-truth values and I_mask are NEVER used in ELBO.
-Evaluation MAE/MAPE on I_mask is separate. Any former GP-VAE MAE checkpoints
-are architecturally incompatible; retrain using beta=0.2 (PhysioNet setting).
 """
 
 import math
@@ -513,7 +452,6 @@ class GPVAEEncoder(nn.Module):
 
 
 class GPVAEDecoder(nn.Module):
-    """Source GaussianDecoder: dense ReLU layers + unit-variance Normal."""
     def __init__(self, latent_dim=35, data_dim=2, hidden_sizes=(256, 256), **_unused):
         super().__init__()
         dims = [latent_dim] + list(hidden_sizes) + [data_dim]
@@ -547,8 +485,6 @@ def _cauchy_prior_matrix(T, sigma, length_scale, kernel, jitter):
     if kernel == 'cauchy':
         k += torch.eye(T, dtype=torch.float64)*jitter
     else:
-        # The source does not add jitter to other kernels; add only enough
-        # numerical jitter when required, made explicit here.
         k += torch.eye(T, dtype=torch.float64)*jitter
     return k
 
@@ -566,8 +502,6 @@ class GPVAEImputer(nn.Module):
         if kwargs:
             raise TypeError('Unexpected GPVAEImputer arguments: '+str(sorted(kwargs)))
         if hidden_dim is not None:
-            # Earlier code used three 1d convolutions; official code uses one.
-            # Here use hidden_dim for both CNN + dense hidden layer if requested.
             encoder_sizes = (hidden_dim, hidden_dim)
             decoder_sizes = (hidden_dim, hidden_dim)
         self.seq_len = int(seq_len)
@@ -612,7 +546,6 @@ class GPVAEImputer(nn.Module):
 
     @torch.no_grad()
     def set_standardization(self, mean, std):
-        """Required only for normalization='fold'; call with TRAIN patients only."""
         mean = torch.as_tensor(mean, dtype=self.fold_mu.dtype, device=self.fold_mu.device)
         std = torch.as_tensor(std, dtype=self.fold_sigma.dtype, device=self.fold_sigma.device)
         self.fold_mu.copy_(mean.reshape(1, 1, self.data_dim))
@@ -655,9 +588,6 @@ class GPVAEImputer(nn.Module):
         return kl_per_batch.mean()
 
     def _draw_banded(self, z_mu, diag, upper):
-        # Source: U is upper bidiagonal, q scale_tril = (U^-1)^T,
-        # hence q covariance = U^-T U^-1 (NOT U^-1 U^-T).
-        # z - mu = U^-T eps; explicit forward substitution O(B Z T).
         eps = torch.randn_like(z_mu)
         values = [None]*self.seq_len
         values[0] = eps[:, 0, :]/diag[:, 0, :]
@@ -700,8 +630,6 @@ class GPVAEImputer(nn.Module):
                 z_draw, eps = self._draw_banded(z_mu, posterior_params['diag'], posterior_params['upper'])
                 z_sample = z_draw if sample else z_mu
                 kl = self._kl_banded_mc(z_mu, posterior_params['diag'], posterior_params['upper'], z_draw, eps)
-                # Exact marginal diagonal variance of the structured posterior
-                # for compatibility with prior outputs; it does NOT imply q is diagonal.
                 diag, upper = posterior_params['diag'], posterior_params['upper']
                 variances = [None]*self.seq_len
                 variances[0] = diag[:, 0, :].square().reciprocal()
@@ -719,15 +647,6 @@ class GPVAEImputer(nn.Module):
 
 def gpvae_loss_same_I_mask(outputs, x_true, m_hat, I_mask,
                            lam_mit=None, beta_kl=None, loss_type=None):
-    """Source-style negative GP-VAE ELBO, despite legacy compatibility name.
-
-    Gaussian reconstruction NLL is evaluated ONLY at observed values; hidden
-    x_true/I_mask are NEVER used to compute loss. The latter can optionally be
-    used for logging withheld-point imputation MAE *after* prediction.
-
-    Source computes nll SUM over time/channels per sample, then batch mean;
-    KL is full trajectory Gaussian KL, not normalized by T or latent_dim.
-    """
     if loss_type is not None and str(loss_type).lower() not in ('nll', 'elbo', 'gaussian'):
         raise ValueError("GP-VAE original objective is Gaussian NLL, not loss_type='mae'/'mse'. Remove loss_type.")
     if lam_mit is not None:
@@ -754,39 +673,12 @@ def gpvae_loss_same_I_mask(outputs, x_true, m_hat, I_mask,
     return total, logs
 
 
-# For callers who prefer the clear new name:
-#gpvae_original_elbo_loss = gpvae_loss_same_I_mask
-
-
-
-
-# ============================================================
-# MTSIT-style Transformer Imputer closer to the original paper
-# (excluding training objective / masking strategy details)
-#
-# Paper-aligned parts:
-# - per-variable normalization across sequence length
-# - input projection: X_norm @ Wp + Bp + Epos
-# - learnable positional encoding
-# - encoder block:
-#       MHA -> residual -> BatchNorm
-#       FFN(GELU + Dropout) -> residual -> BatchNorm
-# - linear decoder
-#
-# Notes:
-# - This version does NOT concatenate [x_in, m_hat]
-# - This version keeps x_c = m_hat*x_in + (1-m_hat)*x_hat for convenience
-#   in downstream imputation usage, though that complement step is not the
-#   core architectural novelty of the paper.
-# ============================================================
+# MTSIT
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# -------------------------
-# Helpers
-# -------------------------
 def masked_timewise_mean_std(x: torch.Tensor, m_hat: torch.Tensor, eps: float = 1e-5):
     """
     Compute mean/std for each sample and variable across time only.
@@ -838,10 +730,6 @@ class TimeBatchNorm(nn.Module):
         x = x.transpose(1, 2)      # (B,T,L)
         return x
 
-
-# -------------------------
-# One MTSIT encoder block
-# -------------------------
 class MTSITEncoderBlock(nn.Module):
     """
     Paper-style encoder block:
@@ -888,9 +776,6 @@ class MTSITEncoderBlock(nn.Module):
         return y, attn_weights
 
 
-# -------------------------
-# MTSIT Imputer
-# -------------------------
 class MTSITImputerOriginalAligned(nn.Module):
     """
     Inputs:
@@ -986,19 +871,9 @@ class MTSITImputerOriginalAligned(nn.Module):
 
 
 
-"""Single-file study pipeline with inlined adapter and original CSDI denoiser.
 
-Colab setup (once):
-    !pip -q install linear-attention-transformer
-    !wget -q https://raw.githubusercontent.com/ermongroup/CSDI/main/diff_models.py -O diff_models.py
 
-Then run this file. No csdi_official_architecture_wrapper module is needed.
-The network diff_CSDI is imported unchanged from the original authors' diff_models.py.
-"""
-
-# ============================================================
-# Inlined CSDI adapter (previously in a separate module)
-# ============================================================
+# CSDI 
 import numpy as np
 import torch
 from torch import nn
@@ -1074,13 +949,10 @@ class OfficialCSDIImputer(nn.Module):
 
     @staticmethod
     def _network_input(noisy, clean, cond_mask):
-        # tensors (B,K,L); original CSDI two-channel condition / noisy target
         return torch.stack((cond_mask*clean, (1-cond_mask)*noisy),dim=1)
 
     def training_loss(self, x_true, m_hat, i_mask, times=None, fixed_step=None):
         """Fixed artificial holdout training. m_hat=visible, i_mask=hidden with GT.
-
-        Note: this differs from the author's original random/historical training mask generator.
         """
         self._check(x_true, m_hat)
         self._check(x_true, i_mask)
@@ -1110,12 +982,6 @@ class OfficialCSDIImputer(nn.Module):
 
     @torch.no_grad()
     def sample(self, x_in, m_hat, n_samples=1, times=None):
-        """Return (n_samples, B, T, D) in original units, sampled independently.
-
-        Parallelized over n_samples by folding the sample dimension into the batch
-        dimension. This keeps the same reverse-diffusion equations and final output
-        format as the original implementation.
-        """
         self._check(x_in, m_hat)
         if n_samples < 1:
             raise ValueError("n_samples >= 1 required")
@@ -1132,10 +998,6 @@ class OfficialCSDIImputer(nn.Module):
         T = x_in.shape[1]
         D = x_in.shape[2]
 
-        # ------------------------------------------------------------
-        # Expand sample dimension into batch dimension
-        # sample-major layout: [sample0: all B] [sample1: all B] ...
-        # ------------------------------------------------------------
         clean_rep = clean.repeat(n_samples, 1, 1)                 # (n_samples*B, K, L)
         cm_rep = cm.repeat(n_samples, 1, 1)                       # (n_samples*B, K, L)
         side_rep = side.repeat(n_samples, 1, 1, 1)                # (n_samples*B, side_dim, K, L)
@@ -1145,13 +1007,8 @@ class OfficialCSDIImputer(nn.Module):
         mu_rep = mu.repeat(n_samples, 1, 1)                       # (n_samples*B, 1, D)
         sigma_rep = sigma.repeat(n_samples, 1, 1)                 # (n_samples*B, 1, D)
 
-        # Initial Gaussian noise for all trajectories at once
         current = torch.randn_like(clean_rep)                     # (n_samples*B, K, L)
 
-        # ------------------------------------------------------------
-        # Reverse diffusion: still 50 sequential steps,
-        # but each step now processes all n_samples trajectories together
-        # ------------------------------------------------------------
         for t in range(self.num_steps - 1, -1, -1):
             step = torch.full(
                 (n_samples * B,),
@@ -1200,34 +1057,7 @@ class OfficialCSDIImputer(nn.Module):
 
 
 """TransMIT: PyTorch port of the authors' TensorFlow/Keras dual-attention model.
-
 Reference: https://github.com/SJoeQin/TransMIT (TransMIT.py, utils.py, run.py)
-
-RETAINED FROM OFFICIAL RELEASE
-- Sliding window of s preceding samples plus one current sample (s=16 by default)
-- Independent temporal and feature-axis MHA branches, post-residual LayerNorm
-- A *single linear* feedforward Dense(d_model) per block (no invented activation)
-- Keras-style MHA with key_dim/value_dim=d_q *per head*
-- Temporal and feature-branch projections, concatenation, temporal global-average,
-  final Dense(d_in)
-- Weighted observed-reconstruction RMSE + missing-imputation RMSE, alpha=0.5
-- Autoregressive one-step imputation that feeds earlier imputed estimates forward
-
-ADAPTATIONS FOR AN (B,1080,2) MASKED PHYSIOLOGICAL BENCHMARK
-- Torch, explicit observation masks (zero can be a legitimate standardized value)
-- Per-fold train-only StandardScaler statistics, set with set_standardization()
-- First 16 samples use LEFT ZERO-PADDING rather than remaining unpredicted;
-  original utils.online_imputation() starts its outputs at t=s.
-- training_loss uses stochastic minibatches of sliding-window examples; this is
-  mathematically the official window-training strategy, with optional bounded
-  number of sampled windows for GPU memory. By default it teacher-forces
-  historical training GT, as the released training code does.
-- validation_loss uses held-out autoregressive imputation (no teacher forcing).
-  This is a study-specific validation protocol, not the authors' window-validation.
-- Compatibility interface: model(x_in,m_hat)->(x_hat,x_c,x_norm_hat,mu,sigma).
-
-NOT OFFICIAL TRAINING CHECKPOINTS: weights are newly trained. Inference requires
-one sequential network call for each missing time point that needs imputation.
 """
 
 import math
@@ -1237,7 +1067,6 @@ from torch.nn import functional as F
 
 
 class _KerasStyleMultiHeadAttention(nn.Module):
-    """Matches tf.keras.layers.MultiHeadAttention(num_heads, key_dim=d_q, value_dim=d_q)."""
     def __init__(self, embed_dim, num_heads=4, d_q=64, dropout=0.1):
         super().__init__()
         hq = int(num_heads) * int(d_q)
@@ -1262,7 +1091,6 @@ class _KerasStyleMultiHeadAttention(nn.Module):
 
 
 class _TransMITBlock(nn.Module):
-    """Exactly the two residual/LN updates described in official TransMIT.py."""
     def __init__(self, d_model=128, n_heads=4, d_q=64, dropout=0.1):
         super().__init__()
         self.attn = _KerasStyleMultiHeadAttention(d_model, n_heads, d_q, dropout)
@@ -1276,13 +1104,6 @@ class _TransMITBlock(nn.Module):
 
 
 class TransMITImputer(nn.Module):
-    """(B,1080,2) TransMIT port; forward returns standard five-tensor interface.
-
-    Set train-fold standardization statistics before training/inference using:
-        model.set_standardization(train_mean, train_std)
-
-    For gradient-based training call training_loss(), *not* forward().
-    """
     def __init__(
         self,
         seq_len=1080,
@@ -1368,12 +1189,6 @@ class TransMITImputer(nn.Module):
     @torch.no_grad()
     def forward(self, x_in, m_hat, predict_observed=False):
         """Sequential inference; optionally predicts even completely observed steps.
-
-        Missing positions are never revealed. The initial s historical positions
-        are padded with standardized zeros (training-set mean in raw units).
-        predict_observed=True generates predictions at all T time steps,
-        matching the authors' inference loop. With False, completely observed
-        steps are skipped for faster imputation-only benchmarking.
         """
         self._check_inputs(x_in, m_hat)
         B, T, D = x_in.shape
@@ -1406,7 +1221,6 @@ class TransMITImputer(nn.Module):
 
     @staticmethod
     def _weighted_rmse(y_pred, y_true, weight):
-        """Official MSE_TransMIT terms: sqrt(sum(weight * error**2)/sum(weight))."""
         n = weight.sum()
         if not bool(n > 0):
             return y_pred.sum() * 0.0
@@ -1414,7 +1228,6 @@ class TransMITImputer(nn.Module):
 
     def training_loss(self, x_in, m_hat, x_true, i_mask, alpha=None, max_train_windows=None):
         """Official-style sliding-window teacher-forced training, weighted RMSE.
-
         Prior s steps come from TRAINING ground truth, as in TransMIT.py.
         At the current step, only observed x_in values are supplied. All input
         sequences must belong to the current TRAIN fold; never call on test data.
